@@ -1,0 +1,132 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Macro to transform count property to multiple resources | Bootcamp Cloud
+Resources:
+  CountMacroExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: ['logs:*']
+                Resource: 'arn:aws:logs:*:*:*'
+  CountMacroHandlerLambda:
+    Type: "AWS::Lambda::Function"
+    Properties: 
+      Code: 
+        ZipFile: |
+          import json
+          import traceback
+          import copy
+
+          COUNT_CONST = "#!Count!#"
+          COUNT_PROPERTY = "Count"
+
+          # Iterate Resources and find count parameters
+          def obj_iterate(obj, params):
+              new_obj = {}
+              if isinstance(obj, dict):
+                  # Iterate all resources
+                  for k in obj:
+                      if COUNT_PROPERTY in obj[k]:
+                          # Get Count and remove it
+                          count = obj[k].pop(COUNT_PROPERTY, None)
+                          for c in range(0, count):
+                              res_key = ""
+                              # Check if COUNT-Variable is used in resource identifier
+                              # if yes replace it, else append it
+                              if COUNT_CONST in k:
+                                  res_key = k.replace(COUNT_CONST, c)
+                              else:
+                                  res_key = '{}{}'.format(k,c)
+                              new_obj[res_key] = copy.deepcopy(obj[k])
+                              replace_placeholders(new_obj[res_key], c)
+                      else:
+                          new_obj[k] = obj[k]
+              return new_obj
+
+          def replace_placeholders(obj, count):
+              if isinstance(obj, dict):
+                  for k in obj:
+                      if isinstance(obj[k], dict):
+                          replace_placeholders(obj[k], count)
+                      elif isinstance(obj[k], list):
+                          for i in range(len(obj[k])):
+                              replace_placeholders(obj[k][i], count)
+                      
+              elif isinstance(obj, list):
+                  for i in range(len(obj)):
+                      obj[i] = replace_placeholders(obj[i], count)
+              else:
+                  obj = obj.replace(COUNT_CONST, str(count))
+              return obj
+
+          def lambda_handler(event, context):
+              print(json.dumps(event))
+              macro_response = {
+                  "requestId": event["requestId"],
+                  "status": "success",
+                  "fragment": event["fragment"]
+              }
+              try:
+                  params = {
+                  "params": event["templateParameterValues"],
+                  "template": event["fragment"],
+                  "account_id": event["accountId"],
+                  "region": event["region"]
+                  }
+                  response = event["fragment"]
+                  macro_response["fragment"]["Resources"] = obj_iterate(response["Resources"], params)
+              except Exception as e:
+                  traceback.print_exc()
+                  macro_response["status"] = "failure"
+                  macro_response["errorMessage"] = str(e)
+              print(json.dumps(macro_response))
+              return macro_response
+
+      Description: Transform count property to multiple resources | Bootcamp Cloud
+      FunctionName: CountMacroHandler
+      Handler: index.lambda_handler
+      Role: !GetAtt CountMacroExecutionRole.Arn
+      Runtime: python3.6
+      Tags: 
+        - Key: Name
+          Value: CountMacroHandler
+  CountMacro:
+    Type: AWS::CloudFormation::Macro
+    Properties:
+      Name: !Sub '${AWS::StackName}'
+      Description: Creates a resource multiple times, depending on 'count' property
+      FunctionName: !GetAtt CountMacroHandlerLambda.Arn
+  # Transform:
+  #   Type: AWS::CloudFormation::Transform
+  #   Properties:
+  #     Name: !Sub '${AWS::AccountId}::CountMacro'
+  #     Description: Macro for adding Count functionality
+  #     RoutingTable:
+  #       '*': 0_1
+  #     Versions:
+  #       - VersionName: 0_1
+  #         Description: Version 0_1 of the CountMacro
+  #         FunctionName: !GetAtt CountMacroHandlerLambda.Arn
+  #     ExecutionPolicy:
+  #       Version: 2012-10-17
+  #       Id: AllowOtherAccountPolicy
+  #       Statement:
+  #         - Sid: AllowExecution
+  #           Effect: Allow
+  #           Principal:
+  #             AWS: !Sub '${AWS::AccountId}'
+  #           Action: 'cloudformation:CreateChangeSet'
+  #           Resource: !Sub 'arn:*:cloudformation:${AWS::Region}:${AWS::AccountId}:transform/CountMacro'

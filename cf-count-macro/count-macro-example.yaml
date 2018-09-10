@@ -1,0 +1,13 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Example for usage of Count Macro
+Parameters:
+  BucketName:
+    Type: String
+    Description: Enter a bucketname
+Resources:
+  S3Bucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Join ['',[ !Ref BucketName, "#!Count!#"]]
+    Count: 4
+Transform: [CountMacro]
