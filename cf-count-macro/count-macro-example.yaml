@@ -8,6 +8,13 @@ Resources:
   S3Bucket:
     Type: "AWS::S3::Bucket"
     Properties:
-      BucketName: !Join ['',[ !Ref BucketName, "#!Count!#"]]
+      BucketName: !Join ['',[ !Ref BucketName, "#Count#"]]
+    Count: 4
+Outputs:
+  S3BucketOutput:
+    Description: S3 Bucket Name #Count#
+    Value: !Ref S3Bucket#Count#
+    Export:
+      Name: BucketName-#Count#
     Count: 4
 Transform: [CountMacro]
