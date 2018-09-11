@@ -20,3 +20,5 @@ S3Bucket:
       BucketName: "test-#Count#"
     Count: 4
 ```
+
+You can find a full working example in count-macro-example.yaml.
