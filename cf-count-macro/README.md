@@ -22,3 +22,5 @@ S3Bucket:
 ```
 
 You can find a full working example in count-macro-example.yaml.
+
+Check out bootcamp-cloud.de other cool projects on AWS.
