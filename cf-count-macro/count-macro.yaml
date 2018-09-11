@@ -8,7 +8,7 @@ Parameters:
         Description: The property name for count
     CountPlaceholder:
         Type: String
-        Default: '#!Count#!'
+        Default: '#Count#'
         Description: The placeholder which will be replaced by the count index
 Resources:
   CountMacroExecutionRole:
@@ -40,8 +40,9 @@ Resources:
             import copy
             import os
 
-            COUNT_CONST = os.getenv('COUNT_PLACEHOLDER', default="#Count#") #"$$$Count$$$"
-            COUNT_PROPERTY = os.getenv('COUNT_PROPERTY') #"Count"
+            # Get Environmen Variables
+            COUNT_CONST = os.getenv('COUNT_PLACEHOLDER', default="#Count#")
+            COUNT_PROPERTY = os.getenv('COUNT_PROPERTY', default="Count")
 
             # Iterate Resources and find count parameters
             def obj_iterate1(obj, params):
@@ -54,7 +55,7 @@ Resources:
                             count = obj[k].pop(COUNT_PROPERTY, None)
                             for c in range(0, count):
                                 res_key = ""
-                                # Check if COUNT-Variable is used in resource identifier
+                                # Check if COUNT_CONST is used in resource identifier
                                 # if yes replace it, else append it
                                 if COUNT_CONST in k:
                                     res_key = k.replace(COUNT_CONST, c)
@@ -66,9 +67,9 @@ Resources:
                             new_obj[k] = obj[k]
                 return new_obj
 
-            def obj_iterate(obj, params):
+            # Iterate each Object
+            def obj_iterate(obj):
                 new_obj = {}
-
                 if isinstance(obj, dict):
                     for k in obj:
                         if isinstance(obj[k],dict) and COUNT_PROPERTY in obj[k]:
@@ -84,14 +85,15 @@ Resources:
                                 new_obj[res_key] = copy.deepcopy(obj[k])
                                 replace_placeholders(new_obj[res_key], c)
                         else:
-                            new_obj[k] = obj_iterate(obj[k], params)
+                            new_obj[k] = obj_iterate(obj[k])
                 elif isinstance(obj, list):
                     for i, v in enumerate(obj):
-                        new_obj[i] = obj_iterate(v, params)
+                        new_obj[i] = obj_iterate(v)
                 else:
                     new_obj = copy.deepcopy(obj)
                 return new_obj
-                
+            
+            # Replace each occurrence of COUNT_CONST with count
             def replace_placeholders(obj, count):
                 if isinstance(obj, dict):
                     for k in obj:
@@ -111,22 +113,13 @@ Resources:
                     "fragment": event["fragment"]
                 }
                 try:
-                    params = {
-                    "params": event["templateParameterValues"],
-                    "template": event["fragment"],
-                    "account_id": event["accountId"],
-                    "region": event["region"]
-                    }
-                    response = event["fragment"]
-                # macro_response["fragment"]["Resources"] = obj_iterate(response["Resources"], params)
-                    macro_response["fragment"] = obj_iterate(response, params)
+                    macro_response["fragment"] = obj_iterate(event["fragment"])
                 except Exception as e:
                     traceback.print_exc()
                     macro_response["status"] = "failure"
                     macro_response["errorMessage"] = str(e)
                 print(json.dumps(macro_response))
                 return macro_response
-
 
       Description: Transform count property to multiple resources | Bootcamp Cloud
       FunctionName: CountMacroHandler
